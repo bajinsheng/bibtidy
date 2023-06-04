@@ -62,7 +62,7 @@ def search_keyword(args):
         print("Error: No results found in the DBLP database.")
         exit (1)
     
-    selected_entries = bibtex_match_publication(entries, args.keyword, args.threshold)
+    selected_entries = bibtex_match_publication(entries, args.keyword)
     
     if len(selected_entries) > args.max:
         selected_entries = selected_entries[:args.max]
@@ -81,7 +81,7 @@ def bibtex_correction(args):
     for entry in bibtex_library.entries:
         entries = dblp_search(entry['title'])
         if (len(entries) > 0):
-            selected_entry = bibtex_match_publication(entries, entry['title'], args.threshold)[0]
+            selected_entry = bibtex_match_publication(entries, entry['title'])[0]
             selected_entry['entry']['ID'] = entry['ID']
         else:
             print("Warning: No results found in the DBLP database for the title: " + entry['title'])
