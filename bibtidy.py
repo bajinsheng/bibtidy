@@ -35,7 +35,7 @@ def googlescholar_naming_conversion(entries):
             entry['ID'] = author + entry['year'] + publication
     return entries
 
-def bibtex_match_publication(entries, title, threshold=0.8):
+def bibtex_match_publication(entries, title):
     """
     Retrieve two lists of most relevant entries from the library as non-eprints and eprints.
     """
@@ -43,11 +43,10 @@ def bibtex_match_publication(entries, title, threshold=0.8):
     selected_eprint_entries = []
     for entry in entries:
         similarity = SequenceMatcher(None, entry['title'], title).ratio()
-        if similarity > threshold:
-            if 'eprint' in entry:
-                selected_eprint_entries.append({"entry": entry, "similarity": similarity})
-            else:
-                selected_entries.append({"entry": entry, "similarity": similarity})
+        if 'eprint' in entry:
+            selected_eprint_entries.append({"entry": entry, "similarity": similarity})
+        else:
+            selected_entries.append({"entry": entry, "similarity": similarity})
 
     sorted_selected_entries = sorted(selected_entries, key=lambda x: x["similarity"], reverse=True)
     sorted_selected_eprint_entries = sorted(selected_eprint_entries, key=lambda x: x["similarity"], reverse=True)
@@ -60,7 +59,8 @@ def search_keyword(args):
     '''
     entries = dblp_search(args.keyword)
     if (len(entries) == 0):
-        raise AssertionError("No results found in the DBLP database.")
+        print("Error: No results found in the DBLP database.")
+        exit (1)
     
     selected_entries = bibtex_match_publication(entries, args.keyword, args.threshold)
     if not args.all:
@@ -97,21 +97,14 @@ def main():
     group.add_argument('-f', '--file', type=str, help='Usage 2: specify the bibtex file for bibtex correction (This option is exclusive with -k/--keyword)')
 
     parser.add_argument('-o', '--output', type=str, default='stdout', help='the file path of the output')
-    parser.add_argument('-a', '--all', action='store_true', default=True, help='output all candidate bibtex entries')
+    parser.add_argument('-a', '--all', action='store_true', default=False, help='output all candidate bibtex entries')
     parser.add_argument('-n', '--naming', choices=['dblp', 'googlescholar'], default='googlescholar', help='naming convention of id')
-    parser.add_argument('-t', '--threshold', type=float, default=0.8, help='the threshold of the similarity for searching the most relevant bibtex entry')
     parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.0.1')
     parser.add_argument('-d', '--debug', action='store_true', default=False, help='enable debug mode')
 
     args = parser.parse_args()
     if not args.debug and not (args.file or args.keyword):
         parser.error("At least one option (--file or --keyword) must be specified.")
-
-    # Debug
-    if args.debug:
-        # args.keyword = "Stateful Greybox Fuzzing"
-        args.file = "test.bib"
-        args.all = False
 
     selected_entries = []
     if (args.keyword):
@@ -120,7 +113,6 @@ def main():
         selected_entries = bibtex_correction(args)
     else:
         exit(1)
-
 
     # Assembly the final result
     dblp_library = bibtexparser.bibdatabase.BibDatabase()
