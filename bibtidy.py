@@ -63,8 +63,9 @@ def search_keyword(args):
         exit (1)
     
     selected_entries = bibtex_match_publication(entries, args.keyword, args.threshold)
-    if not args.all:
-        selected_entries = [selected_entries[0]]
+    
+    if len(selected_entries) > args.max:
+        selected_entries = selected_entries[:args.max]
     if args.naming == 'googlescholar':
         selected_entries = googlescholar_naming_conversion(selected_entries)
     return selected_entries
@@ -94,10 +95,10 @@ def main():
     parser = argparse.ArgumentParser(description='bibtidy: Make your research easier with correct citations!')
     group = parser.add_mutually_exclusive_group()
     group.add_argument('-k', '--keyword', type=str, help='Usage 1: specify the keyword for searching the most relevant bibtex entry (This option is exclusive with -f/--file)')
-    group.add_argument('-f', '--file', type=str, help='Usage 2: specify the bibtex file for bibtex correction (This option is exclusive with -k/--keyword)')
+    group.add_argument('-f', '--file', type=str, help='Usage 2: specify the bibtex file for bibtex checking (This option is exclusive with -k/--keyword)')
 
+    parser.add_argument('-m', '--max', type=int, default=1, help='The maximum number of candidates output for keyword search. Always 1 for bibtex checking.')
     parser.add_argument('-o', '--output', type=str, default='stdout', help='the file path of the output')
-    parser.add_argument('-a', '--all', action='store_true', default=False, help='output all candidate bibtex entries')
     parser.add_argument('-n', '--naming', choices=['dblp', 'googlescholar'], default='googlescholar', help='naming convention of id')
     parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.0.1')
     parser.add_argument('-d', '--debug', action='store_true', default=False, help='enable debug mode')
