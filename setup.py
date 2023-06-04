@@ -17,7 +17,7 @@ setuptools.setup(
     url="https://github.com/bajinsheng/bibtidy",
     py_modules=["bibtidy"],
     packages=setuptools.find_packages(),
-    install_requires=['bibtexparser',
+    install_requires=['bibtexparser==1.4.0',
                       'requests',
                     ],
     classifiers=[
