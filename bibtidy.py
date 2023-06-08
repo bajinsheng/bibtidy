@@ -118,7 +118,9 @@ def main():
     # Assembly the final result
     dblp_library = bibtexparser.bibdatabase.BibDatabase()
     dblp_library.entries = [entry['entry'] for entry in selected_entries]
-    result = bibtexparser.dumps(dblp_library)
+    writer = bibtexparser.bwriter.BibTexWriter()
+    writer.order_entries_by = None
+    result = bibtexparser.dumps(dblp_library, writer=writer)
     if args.output == 'stdout':
         print(result)
     else:
