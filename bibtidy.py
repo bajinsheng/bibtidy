@@ -59,7 +59,7 @@ def search_keyword(args):
     '''
     entries = dblp_search(args.keyword)
     if (len(entries) == 0):
-        print("Error: No results found in the DBLP database.")
+        print("[WARNING] No results found in the DBLP database.")
         exit (1)
     
     selected_entries = bibtex_match_publication(entries, args.keyword)
@@ -70,7 +70,7 @@ def search_keyword(args):
         selected_entries = googlescholar_naming_conversion(selected_entries)
     return selected_entries
     
-def bibtex_correction(args):
+def bibtex_checking(args):
     '''
     Usage 2: correct the bibtex file with the dblp database and return the results.
     '''
@@ -83,8 +83,13 @@ def bibtex_correction(args):
         if (len(entries) > 0):
             selected_entry = bibtex_match_publication(entries, entry['title'])[0]
             selected_entry['entry']['ID'] = entry['ID']
+            if selected_entry['similarity'] < 0.8:
+                print("[Warning] Suspicious update: \"" + entry['title'] + "\" -> \"" + selected_entry['entry']['title'] + "\". Please check whether it is correct.")
+            elif selected_entry['similarity'] < 1 and args.debug:
+                print("[Debug] \"" + entry['title'] + "\" -> \"" + selected_entry['entry']['title'] + "\".")
         else:
-            print("Warning: No results found in the DBLP database for the title: " + entry['title'])
+            if args.debug:
+                print("[Debug] \"" + entry['title'] + "\" is not found in the DBLP database.")
             selected_entry = {"entry": entry, "similarity": 1}
         selected_entries.append(selected_entry)
     return selected_entries
@@ -111,7 +116,7 @@ def main():
     if (args.keyword):
         selected_entries = search_keyword(args)
     elif (args.file):
-        selected_entries = bibtex_correction(args)
+        selected_entries = bibtex_checking(args)
     else:
         exit(1)
 
