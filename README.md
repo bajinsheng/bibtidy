@@ -1,12 +1,12 @@
 # bibtidy
 
-Welcome to bibtidy, a simply tool for simplifying the creation of your BibTeX files! 
+Welcome to bibtidy, a simple tool for simplifying the creation of your BibTeX files! 
 
 ## Welcome Stars
 If you like this tool, don't forget to star it! Your support is my motivation to keep updating this tool.
 
 ## Features
-1. Finding: Search a keyword from DBLP and show all relevant BibTex entries in order.
+1. Searching: Search a keyword from DBLP and show all relevant BibTex entries in order.
 2. Checking: Automatically fix incorrect and fill incomplete entries with reference to DBLP.
 
 ## Requirements
@@ -15,12 +15,16 @@ Python 3.10.0
 
 ## Installation
 ```shell
-pip3 install git+https://github.com/bajinsheng/bibtidy@main
+pip3 install git+https://github.com/bajinsheng/bibtidy@release
+```
+If you want to install it in an isolated virtualenv, you can use `pipx` instead:
+```shell
+pipx install git+https://github.com/bajinsheng/bibtidy@release
 ```
 
-## Usage 1: Search for a paper
+## Usage 1: Searching for a paper
 ```python
-python3 -m bibtidy --keyword "How Good Are Query Optimizers"
+bibtidy --keyword "How Good Are Query Optimizers"
 ```
 The output will be:
 ```bibtex
@@ -45,7 +49,7 @@ Thomas Neumann},
 }
 ```
 
-## Usage 2: Check a BibTeX file
+## Usage 2: Checking a BibTeX file
 Suppose we have a file named "test.bib" with some BibTex entries from unknown sources:
 ```bibtex
 @misc{ba2022efficient,
@@ -60,7 +64,7 @@ Suppose we have a file named "test.bib" with some BibTex entries from unknown so
 ```
 We can check and autofix it by running the following command:
 ```python
-python3 -m bibtidy --file "test.bib"
+bibtidy --file "test.bib"
 ```
 
 The output will be:
