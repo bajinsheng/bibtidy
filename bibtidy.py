@@ -4,7 +4,7 @@ import argparse
 import requests
 import bibtexparser
 from difflib import SequenceMatcher
-
+from bibtexparser.bparser import BibTexParser
 
 def dblp_search(keyword):
     """
@@ -75,7 +75,9 @@ def bibtex_checking(args):
     Usage 2: correct the bibtex file with the dblp database and return the results.
     '''
     with open(args.file) as bibtex_file:
-        bibtex_library = bibtexparser.load(bibtex_file)
+        parser = BibTexParser()
+        parser.ignore_nonstandard_types = False
+        bibtex_library = bibtexparser.load(bibtex_file, parser)
 
     selected_entries = []
     for entry in bibtex_library.entries:
@@ -83,7 +85,10 @@ def bibtex_checking(args):
         if (len(entries) > 0):
             selected_entry = bibtex_match_publication(entries, entry['title'])[0]
             selected_entry['entry']['ID'] = entry['ID']
-            if selected_entry['similarity'] < 0.8:
+            if selected_entry['similarity'] < 0.5:
+                if args.debug:
+                    print("[Debug] \"" + entry['title'] + "\" has no similar entires.")   
+            elif selected_entry['similarity'] < 0.8:
                 print("[Warning] Suspicious update: \"" + entry['title'] + "\" -> \"" + selected_entry['entry']['title'] + "\". Please check whether it is correct.")
             elif selected_entry['similarity'] < 1 and args.debug:
                 print("[Debug] \"" + entry['title'] + "\" -> \"" + selected_entry['entry']['title'] + "\".")
