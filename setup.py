@@ -1,6 +1,6 @@
 import setuptools
 
-version = "0.0.1"
+version = "0.0.2"
 
 def load_readme():
     with open("README.md") as f:
