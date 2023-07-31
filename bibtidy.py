@@ -110,7 +110,7 @@ def main():
     parser.add_argument('-m', '--max', type=int, default=1, help='The maximum number of candidates output for keyword search. Always 1 for bibtex checking.')
     parser.add_argument('-o', '--output', type=str, default='stdout', help='the file path of the output')
     parser.add_argument('-n', '--naming', choices=['dblp', 'googlescholar'], default='googlescholar', help='naming convention of id')
-    parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.0.1')
+    parser.add_argument('-v', '--version', action='version', version='%(prog)s 0.0.2')
     parser.add_argument('-d', '--debug', action='store_true', default=False, help='enable debug mode')
 
     args = parser.parse_args()
