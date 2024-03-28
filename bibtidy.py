@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import argparse
+import time
 import requests
 import bibtexparser
 from difflib import SequenceMatcher
@@ -16,10 +17,18 @@ def dblp_search(keyword):
     "h": 10,              # The maximum retrieved items
     "format": "bib"      # The return output format
     }
-    response = requests.get(base_url, params=params)
-    # Jude the response status
-    if response.status_code != 200:
-        raise AssertionError("Error occurs when fetching the data from DBLP. Status code: " + str(response.status_code))
+    # Continue to try this loop until the response status is 200
+    while True:
+        response = requests.get(base_url, params=params)
+        if response.status_code == 200:
+            break
+        elif response.status_code == 429: # Request too frequent
+            retry_after = int(response.headers['Retry-After'])
+            print("[WARNING] Request too frequent. Retry after " + str(retry_after) + " seconds.")
+            time.sleep(retry_after)
+            print("[INFO] Retry the request.")
+        else:
+            raise AssertionError("Error occurs when fetching the data from DBLP. Status code: " + str(response.status_code))
     bib = bibtexparser.loads(response.text)
     return bib.entries
 
