@@ -64,7 +64,7 @@ def bibtex_checking(bibtex_library, args):
                     if key.text.split(" ")[-1].isdigit(): # Remove the number at the end of the author name
                         authors += key.text.rsplit(' ', 1)[0]
                     authors += re.sub(r'\s*\d+$', '', key.text)
-                elif key.tag == 'url': # Ignore interrnal tags
+                elif key.tag == 'url' or key.tag == 'crossref': # Ignore interrnal tags
                     continue
                 elif key.tag == 'ee': # Convert DOI
                     entry['url'] = key.text
