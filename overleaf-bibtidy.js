@@ -272,28 +272,32 @@
             if (newEntries.length > 0) {
                 // For each new entry, check DBLP and show error icon if needed
                 newEntries.forEach(async entry => {
-                    let issues = [];
-                    let correctBibTeX = null;
-                    if (entry.fields.title) {
-                        try {
-                            const dblpEntry = await this.searchDBLP(entry.fields.title);
-                            if (dblpEntry) {
-                                correctBibTeX = this.formatDBLPEntry(dblpEntry, entry.key);
-                                issues = this.compareWithDBLP(entry, dblpEntry);
-                            } else {
-                                issues = this.validateEntry(entry);
-                            }
-                        } catch (error) {
-                            issues = this.validateEntry(entry);
-                        }
-                    } else {
-                        issues = this.validateEntry(entry);
-                    }
+                    const { issues, correctBibTeX } = await this.getEntryIssuesAndCorrection(entry);
                     if (issues.length > 0) {
                         this.showError(entry, issues, correctBibTeX);
                     }
                 });
             }
+        }
+        /**
+         * Shared logic for BibTeX entry validation and DBLP comparison.
+         * Returns { issues, correctBibTeX }
+         */
+        async getEntryIssuesAndCorrection(entry) {
+            let issues = [];
+            let correctBibTeX = null;
+            if (entry.fields.title) {
+                try {
+                    const dblpEntry = await this.searchDBLP(entry.fields.title);
+                    if (dblpEntry) {
+                        correctBibTeX = this.formatDBLPEntry(dblpEntry, entry.key);
+                        issues = this.compareWithDBLP(entry, dblpEntry);
+                    }
+                } catch (error) {
+                    issues.push('Error fetching DBLP data');
+                }
+            }
+            return { issues, correctBibTeX };
         }
 
         updateErrorIconPositions() {
@@ -375,32 +379,9 @@
             const entries = this.parseBibTeX(content);
 
             for (const entry of entries) {
-                if (entry.fields.title) {
-                    try {
-                        const dblpEntry = await this.searchDBLP(entry.fields.title);
-                        if (dblpEntry) {
-                            const correctBibTeX = this.formatDBLPEntry(dblpEntry, entry.key);
-                            const issues = this.compareWithDBLP(entry, dblpEntry);
-                            if (issues.length > 0) {
-                                this.showError(entry, issues, correctBibTeX);
-                            }
-                        } else {
-                            const issues = this.validateEntry(entry);
-                            if (issues.length > 0) {
-                                this.showError(entry, issues);
-                            }
-                        }
-                    } catch (error) {
-                        const issues = this.validateEntry(entry);
-                        if (issues.length > 0) {
-                            this.showError(entry, issues);
-                        }
-                    }
-                } else {
-                    const issues = this.validateEntry(entry);
-                    if (issues.length > 0) {
-                        this.showError(entry, issues);
-                    }
+                const { issues, correctBibTeX } = await this.getEntryIssuesAndCorrection(entry);
+                if (issues.length > 0) {
+                    this.showError(entry, issues, correctBibTeX);
                 }
             }
         }
@@ -415,9 +396,9 @@
                 const key = match[2].trim();
                 const startPos = match.index;
 
-                // Find entry end
+                // Find entry end (only accept if braces are balanced)
                 let braces = 0;
-                let endPos = startPos;
+                let endPos = -1;
                 let foundFirstBrace = false;
 
                 for (let i = startPos; i < content.length; i++) {
@@ -433,17 +414,20 @@
                     }
                 }
 
-                const entryText = content.substring(startPos, endPos + 1);
-                const fields = this.parseFields(entryText);
+                // Only parse if a complete entry (balanced braces) was found
+                if (endPos !== -1) {
+                    const entryText = content.substring(startPos, endPos + 1);
+                    const fields = this.parseFields(entryText);
 
-                entries.push({
-                    type,
-                    key,
-                    startPos,
-                    endPos,
-                    text: entryText,
-                    fields
-                });
+                    entries.push({
+                        type,
+                        key,
+                        startPos,
+                        endPos,
+                        text: entryText,
+                        fields
+                    });
+                }
             }
 
             return entries;
@@ -740,7 +724,7 @@
                     ${suggestionHtml}
                 </div>
                 <div class="bibtex-popup-actions">
-                    <button class="bibtex-btn" onclick="this.parentElement.parentElement.remove()">
+                    <button class="bibtex-btn bibtex-btn-dismiss">
                         Dismiss
                     </button>
                     ${correctBibTeX ?
@@ -755,6 +739,14 @@
             `;
 
             document.body.appendChild(popup);
+
+            // Add event listener for the dismiss button
+            const dismissBtn = popup.querySelector('.bibtex-btn-dismiss');
+            if (dismissBtn) {
+                dismissBtn.addEventListener('click', () => {
+                    popup.remove();
+                });
+            }
 
             // Add event listener for the apply button
             const applyBtn = popup.querySelector('.bibtex-btn-apply');
@@ -788,9 +780,87 @@
         applyCorrection(entryKey) {
             const errorData = this.errors.find(e => e.entry.key === entryKey);
             if (!errorData || !errorData.correctBibTeX) return;
-            const content = this.getEditorContent();
-            const newContent = content.replace(errorData.entry.text, errorData.correctBibTeX);
-            this.setEditorContent(newContent);
+            const newEntry = errorData.correctBibTeX;
+
+            // Locate the entry key position in the editor nodes
+            let walker = document.createTreeWalker(this.editor, NodeFilter.SHOW_TEXT);
+            let nodes = [], fullText = '', keyIdx = -1, keyNodeIdx = -1, keyOffset = -1;
+            while (true) {
+                let node = walker.nextNode();
+                if (!node) break;
+                nodes.push(node);
+            }
+            fullText = nodes.map(n => n.textContent).join('');
+            keyIdx = fullText.indexOf(entryKey);
+            if (keyIdx !== -1) {
+                // Find node and offset for entry key
+                let count = 0;
+                for (let i = 0; i < nodes.length; i++) {
+                    let nodeLen = nodes[i].textContent.length;
+                    if (count + nodeLen > keyIdx) {
+                        keyNodeIdx = i;
+                        keyOffset = keyIdx - count;
+                        break;
+                    }
+                    count += nodeLen;
+                }
+                // Expand range to cover the full BibTeX entry
+                // Scan forward from keyIdx to find the opening '{' and then match braces to find closing '}'
+                let entryStartIdx = fullText.lastIndexOf('@', keyIdx);
+                let braceCount = 0, entryEndIdx = -1;
+                let foundFirstBrace = false;
+                for (let i = keyIdx - 1; i < fullText.length; i++) {
+                    if (fullText[i] === '{') {
+                        braceCount++;
+                        foundFirstBrace = true;
+                    } else if (fullText[i] === '}') {
+                        braceCount--;
+                        if (foundFirstBrace && braceCount === 0) {
+                            entryEndIdx = i;
+                            break;
+                        }
+                    }
+                }
+                if (entryStartIdx !== -1 && entryEndIdx !== -1) {
+                    // Map entryStartIdx and entryEndIdx to node/offsets
+                    let startNode = null, startOffset = 0, endNode = null, endOffset = 0;
+                    let count = 0;
+                    for (let i = 0; i < nodes.length; i++) {
+                        let nodeLen = nodes[i].textContent.length;
+                        if (!startNode && count + nodeLen > entryStartIdx) {
+                            startNode = nodes[i];
+                            startOffset = entryStartIdx - count;
+                        }
+                        if (!endNode && count + nodeLen > entryEndIdx) {
+                            endNode = nodes[i];
+                            endOffset = entryEndIdx - count + 1;
+                            break;
+                        }
+                        count += nodeLen;
+                    }
+                    if (startNode && endNode) {
+                        // Select the entry across nodes
+                        const range = document.createRange();
+                        range.setStart(startNode, startOffset);
+                        range.setEnd(endNode, endOffset);
+                        const sel = window.getSelection();
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                        // Remove the old entry
+                        document.execCommand('delete');
+                        // Insert the new entry at the same position
+                        document.execCommand('insertText', false, newEntry);
+                    }
+                }
+            } else {
+                // Fallback: use regex to find and replace
+                const content = this.getEditorContent();
+                const entryRegex = new RegExp(`@\\w+\\s*\\{\\s*${entryKey}[^@]*?\\}`, 's');
+                const updatedContent = content.replace(entryRegex, newEntry);
+                this.setEditorContent(updatedContent);
+            }
+
+            // Simulate user input
             const inputEvent = new Event('input', { bubbles: true });
             const changeEvent = new Event('change', { bubbles: true });
             this.editor.dispatchEvent(inputEvent);
