@@ -94,7 +94,7 @@ Abhik Roychoudhury},
 
 ``Note: due to the rate limitation of DBLP, the checking process may be failed for large BibTeX files. In this case, you can split the file into smaller parts and check them separately.``
 
-## Usage 3: Overleaf BibTeX Checker (Grammarly Style)
+## Usage 3: Overleaf BibTeX Checker
 
 This is a Tampermonkey/Greasemonkey userscript for Overleaf. It provides real-time BibTeX validation and DBLP-powered corrections directly in the Overleaf editor.
 
