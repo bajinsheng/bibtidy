@@ -34,10 +34,6 @@
             pointer-events: auto;
         }
 
-        .bibtex-error-icon::before {
-            content: '!';
-        }
-
         .bibtex-error-icon:hover {
             background: #ff7875;
             transform: scale(1.1);
@@ -169,7 +165,6 @@
             // Manual check button (only visible when .bib file is selected)
             // Create a draggable, beautiful button in the left bottom
             const btn = document.createElement('button');
-            btn.textContent = 'Check BibTeX';
             btn.setAttribute('id', 'bibtidy-check-btn');
             btn.style.cssText = `
                 position:fixed;
@@ -188,16 +183,23 @@
                 letter-spacing:0.5px;
                 display:none;
                 transition:box-shadow 0.2s,transform 0.2s;
+                display: flex;
+                align-items: center;
+                gap: 10px;
             `;
-            btn.onmouseenter = () => {
-                btn.style.boxShadow = '0 4px 16px rgba(24,144,255,0.25)';
-                btn.style.transform = 'scale(1.05)';
-            };
-            btn.onmouseleave = () => {
-                btn.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-                btn.style.transform = 'scale(1)';
-            };
-            btn.onclick = () => {
+            // Button content: text and cycle icon
+            btn.innerHTML = `
+                <span style="pointer-events: none;">Check BibTeX</span>
+                <span id="bibtidy-cycle-icon" style="display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;font-size:18px;cursor:pointer;background:rgba(255,255,255,0.15);border-radius:50%;transition:background 0.2s;">
+                    &#x27F3;
+                </span>
+            `;
+            document.body.appendChild(btn);
+
+            // Cycle icon click: call checkBibTeX
+            const cycleIcon = btn.querySelector('#bibtidy-cycle-icon');
+            cycleIcon.onclick = (e) => {
+                e.stopPropagation();
                 const editor = document.querySelector('.cm-content[contenteditable="true"][data-language="bibtex"]');
                 if (editor) {
                     this.editor = editor;
@@ -206,11 +208,17 @@
                     alert('Please select a .bib file in the file tree and open it in the editor.');
                 }
             };
-            document.body.appendChild(btn);
+
+            // Main button click (not cycle icon): open DBLP search popup
+            btn.addEventListener('click', (e) => {
+                if (e.target === cycleIcon) return; // already handled
+                this.showDBLPSearchPopup();
+            });
 
             // Make button draggable
             let isDragging = false, dragOffsetX = 0, dragOffsetY = 0;
             btn.addEventListener('mousedown', function(e) {
+                if (e.target === cycleIcon) return;
                 isDragging = true;
                 dragOffsetX = e.clientX - btn.getBoundingClientRect().left;
                 dragOffsetY = e.clientY - btn.getBoundingClientRect().top;
@@ -235,13 +243,107 @@
             // Show/hide button based on .bib file selection
             const updateBtnVisibility = () => {
                 const selectedFile = document.querySelector('li[aria-selected="true"][aria-label$=".bib"]');
-                btn.style.display = selectedFile ? 'block' : 'none';
+                btn.style.display = selectedFile ? 'flex' : 'none';
             };
             // Initial check
             updateBtnVisibility();
             // Observe file tree selection changes
             const fileTreeObserver = new MutationObserver(updateBtnVisibility);
             fileTreeObserver.observe(document.body, { childList: true, subtree: true });
+        }
+
+        // Show DBLP search popup for keyword search
+        showDBLPSearchPopup() {
+            document.querySelectorAll('.bibtidy-dblp-popup').forEach(p => p.remove());
+            const popup = document.createElement('div');
+            popup.className = 'bibtidy-dblp-popup';
+            popup.style.cssText = `
+                position: fixed;
+                left: 50%;
+                top: 20%;
+                transform: translate(-50%, 0);
+                background: #fff;
+                border: 1px solid #d9d9d9;
+                border-radius: 8px;
+                box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+                padding: 24px 24px 16px 24px;
+                z-index: 10001;
+                min-width: 400px;
+                max-width: 90vw;
+            `;
+            popup.innerHTML = `
+                <div style="font-weight:600;font-size:18px;margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+                    <span>🔎</span> Search DBLP
+                </div>
+                <div style="margin-bottom:12px;">
+                    <input id="bibtidy-dblp-keyword" type="text" placeholder="Enter keyword (title, author, etc.)" style="width:70%;padding:6px 10px;font-size:15px;border:1px solid #d9d9d9;border-radius:4px;" />
+                    <button id="bibtidy-dblp-search-btn" style="margin-left:10px;padding:6px 16px;font-size:15px;border-radius:4px;border:1px solid #1890ff;background:#1890ff;color:white;cursor:pointer;">Search</button>
+                </div>
+                <div id="bibtidy-dblp-results" style="max-height:300px;overflow-y:auto;"></div>
+                <div style="text-align:right;margin-top:10px;">
+                    <button id="bibtidy-dblp-close-btn" style="padding:4px 16px;border-radius:4px;border:1px solid #d9d9d9;background:#fff;cursor:pointer;">Close</button>
+                </div>
+            `;
+            document.body.appendChild(popup);
+
+            // Close button
+            popup.querySelector('#bibtidy-dblp-close-btn').onclick = () => popup.remove();
+
+            // Search button
+            popup.querySelector('#bibtidy-dblp-search-btn').onclick = async () => {
+                const keyword = popup.querySelector('#bibtidy-dblp-keyword').value.trim();
+                const resultsDiv = popup.querySelector('#bibtidy-dblp-results');
+                resultsDiv.innerHTML = '<div style="color:#888;">Searching...</div>';
+                if (!keyword) {
+                    resultsDiv.innerHTML = '<div style="color:#d32f2f;">Please enter a keyword.</div>';
+                    return;
+                }
+                // Query DBLP
+                const bibs = await this.searchDBLPByKeyword(keyword, 3);
+                if (!bibs || bibs.length === 0) {
+                    resultsDiv.innerHTML = '<div style="color:#d32f2f;">No results found.</div>';
+                    return;
+                }
+                resultsDiv.innerHTML = bibs.map(bib => `
+                    <div style="background:#f6ffed;border-left:3px solid #52c41a;padding:8px;margin:8px 0;font-family:monospace;font-size:12px;white-space:pre-wrap;position:relative;">
+                        <button style="position:absolute;top:8px;right:8px;padding:2px 8px;font-size:12px;border-radius:4px;border:1px solid #1890ff;background:#1890ff;color:white;cursor:pointer;" onclick="navigator.clipboard.writeText(\`${bib}\`)">Copy</button>
+                        ${bib}
+                    </div>
+                `).join('');
+            };
+        }
+
+        // Query DBLP for top-N BibTeX entries by keyword
+        async searchDBLPByKeyword(keyword, n = 3) {
+            return new Promise((resolve) => {
+                const query = encodeURIComponent(keyword);
+                const url = `https://dblp.org/search/publ/api?q=${query}&format=bib&h=${n}`;
+                GM_xmlhttpRequest({
+                    method: 'GET',
+                    url: url,
+                    timeout: 5000,
+                    onload: (response) => {
+                        try {
+                            if (response.status === 200) {
+                                const bibText = response.responseText.trim();
+                                if (bibText && bibText.includes('@')) {
+                                    // Split into entries
+                                    const entries = bibText.split(/(?=@\w+\s*\{)/g).map(e => e.trim()).filter(e => e);
+                                    resolve(entries.slice(0, n));
+                                } else {
+                                    resolve([]);
+                                }
+                            } else {
+                                resolve([]);
+                            }
+                        } catch (e) {
+                            resolve([]);
+                        }
+                    },
+                    onerror: () => resolve([]),
+                    ontimeout: () => resolve([])
+                });
+            });
         }
 
         setupEditorWatcher() {
@@ -270,12 +372,10 @@
             // Find new entries not yet shown
             const newEntries = entries.filter(e => !shownKeys.has(e.key));
             if (newEntries.length > 0) {
-                // For each new entry, check DBLP and show error icon if needed
+                // For each new entry, check DBLP and show icon
                 newEntries.forEach(async entry => {
-                    const { issues, correctBibTeX } = await this.getEntryIssuesAndCorrection(entry);
-                    if (issues.length > 0) {
-                        this.showError(entry, issues, correctBibTeX);
-                    }
+                    const { issues, correctBibTeX, status } = await this.getEntryIssuesAndCorrection(entry);
+                    this.showError(entry, issues, correctBibTeX, status);
                 });
             }
         }
@@ -283,21 +383,36 @@
          * Shared logic for BibTeX entry validation and DBLP comparison.
          * Returns { issues, correctBibTeX }
          */
+        /**
+         * Returns { issues, correctBibTeX, status }
+         * status: 'pass', 'not_found', 'mismatch', 'error'
+         */
         async getEntryIssuesAndCorrection(entry) {
             let issues = [];
             let correctBibTeX = null;
+            let status = 'not_found';
             if (entry.fields.title) {
                 try {
                     const dblpEntry = await this.searchDBLP(entry.fields.title);
                     if (dblpEntry) {
                         correctBibTeX = this.formatDBLPEntry(dblpEntry, entry.key);
                         issues = this.compareWithDBLP(entry, dblpEntry);
+                        if (issues.length === 0) {
+                            status = 'pass';
+                        } else {
+                            status = 'mismatch';
+                        }
+                    } else {
+                        status = 'not_found';
                     }
                 } catch (error) {
-                    issues.push('Error fetching DBLP data');
+                    issues = ['Error fetching DBLP data'];
+                    status = 'error';
                 }
+            } else {
+                status = 'not_found';
             }
-            return { issues, correctBibTeX };
+            return { issues, correctBibTeX, status };
         }
 
         updateErrorIconPositions() {
@@ -379,10 +494,8 @@
             const entries = this.parseBibTeX(content);
 
             for (const entry of entries) {
-                const { issues, correctBibTeX } = await this.getEntryIssuesAndCorrection(entry);
-                if (issues.length > 0) {
-                    this.showError(entry, issues, correctBibTeX);
-                }
+                const { issues, correctBibTeX, status } = await this.getEntryIssuesAndCorrection(entry);
+                this.showError(entry, issues, correctBibTeX, status);
             }
         }
 
@@ -635,7 +748,11 @@
             return issues;
         }
 
-        showError(entry, issues, correctBibTeX = null) {
+        /**
+         * Show an icon for the entry based on status: 'pass', 'not_found', 'mismatch', 'error'.
+         * status: 'pass' (green check), 'not_found' (gray question), 'mismatch' (red !), 'error' (red X)
+         */
+        showError(entry, issues, correctBibTeX = null, status = 'mismatch') {
             const range = this.getEntryRange(entry);
             if (!range) return;
 
@@ -648,13 +765,33 @@
             icon.style.top = (rect.top + 2) + 'px';
             icon.style.pointerEvents = 'auto';
 
+            // Set icon style and content based on status
+            if (status === 'pass') {
+                icon.style.background = '#52c41a'; // green
+                icon.textContent = '✓';
+                icon.title = 'Entry matches DBLP';
+            } else if (status === 'not_found') {
+                icon.style.background = '#bfbfbf'; // gray
+                icon.textContent = '?';
+                icon.title = 'Entry not found in DBLP';
+            } else if (status === 'error') {
+                icon.style.background = '#d32f2f'; // red
+                icon.textContent = '✗';
+                icon.title = 'Error fetching DBLP data';
+            } else {
+                // mismatch or default
+                icon.style.background = '#ff4d4f'; // red
+                icon.textContent = '!';
+                icon.title = 'Entry differs from DBLP';
+            }
+
             icon.onclick = (e) => {
                 e.stopPropagation();
-                this.showPopup(entry, issues, icon, correctBibTeX);
+                this.showPopup(entry, issues, icon, correctBibTeX, status);
             };
 
             this.overlay.appendChild(icon);
-            this.errors.push({ entry, icon, issues, correctBibTeX });
+            this.errors.push({ entry, icon, issues, correctBibTeX, status });
         }
 
         getEntryRange(entry) {
@@ -674,12 +811,11 @@
             return null;
         }
 
-        showPopup(entry, issues, icon, correctBibTeX = null) {
+        showPopup(entry, issues, icon, correctBibTeX = null, status = 'mismatch') {
             document.querySelectorAll('.bibtex-popup').forEach(p => p.remove());
 
             const popup = document.createElement('div');
             popup.className = 'bibtex-popup';
-
 
             // Diff-style highlight for issues
             function diffHighlight(issue) {
@@ -711,13 +847,30 @@
                 `;
             }
 
+            // Choose popup icon and header based on status
+            let popupIcon = '⚠️';
+            let popupHeader = 'BibTeX Issues Found';
+            if (status === 'pass') {
+                popupIcon = '✅';
+                popupHeader = 'Entry matches DBLP';
+            } else if (status === 'not_found') {
+                popupIcon = '❓';
+                popupHeader = 'Entry not found in DBLP';
+            } else if (status === 'error') {
+                popupIcon = '❌';
+                popupHeader = 'Error fetching DBLP data';
+            } else if (correctBibTeX) {
+                popupIcon = '🔍';
+                popupHeader = 'DBLP Correction Available';
+            }
+
             popup.innerHTML = `
                 <div class="bibtex-popup-header">
-                    <span>${correctBibTeX ? '🔍' : '⚠️'}</span>
-                    ${correctBibTeX ? 'DBLP Correction Available' : 'BibTeX Issues Found'}
+                    <span>${popupIcon}</span>
+                    ${popupHeader}
                 </div>
                 <div class="bibtex-popup-body">
-                    <strong>Entry "${entry.key}" ${correctBibTeX ? 'differs from DBLP:' : 'has issues:'}</strong>
+                    <strong>Entry "${entry.key}" ${status === 'pass' ? 'matches DBLP.' : status === 'not_found' ? 'not found in DBLP.' : status === 'error' ? 'error fetching DBLP data.' : correctBibTeX ? 'differs from DBLP:' : 'has issues:'}</strong>
                     <ul style="margin: 4px 0; padding-left: 16px;">
                         ${issues.map(diffHighlight).join('')}
                     </ul>
@@ -727,7 +880,7 @@
                     <button class="bibtex-btn bibtex-btn-dismiss">
                         Dismiss
                     </button>
-                    ${correctBibTeX ?
+                    ${correctBibTeX && status === 'mismatch' ?
                         `<button class="bibtex-btn bibtex-btn-apply" data-entry-key="${entry.key}">
                             Apply DBLP Fix
                         </button>` :
