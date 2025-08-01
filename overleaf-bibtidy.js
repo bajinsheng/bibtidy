@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         BibTidy plugin for Overleaf Editor
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  Simple BibTeX validation in Overleaf
 // @author       Jinsheng BA
 // @match        https://www.overleaf.com/project/*
