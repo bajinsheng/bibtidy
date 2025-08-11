@@ -125,7 +125,7 @@
             this.overlay = null;
             this.editor = null;
             this.errors = [];
-            this.titleSimilarityThreshold = 0.3; // Minimum similarity threshold (0-1)
+            this.titleSimilarityThreshold = 0.6; // Minimum similarity threshold (0-1)
         }
 
         init() {
@@ -304,12 +304,27 @@
                     resultsDiv.innerHTML = '<div style="color:#d32f2f;">No results found.</div>';
                     return;
                 }
-                resultsDiv.innerHTML = bibs.map(bib => `
+                resultsDiv.innerHTML = bibs.map((bib, idx) => `
                     <div style="background:#f6ffed;border-left:3px solid #52c41a;padding:8px;margin:8px 0;font-family:monospace;font-size:12px;white-space:pre-wrap;position:relative;">
-                        <button style="position:absolute;top:8px;right:8px;padding:2px 8px;font-size:12px;border-radius:4px;border:1px solid #1890ff;background:#1890ff;color:white;cursor:pointer;" onclick="navigator.clipboard.writeText(\`${bib}\`)">Copy</button>
-                        ${bib}
+                        <button class="bibtidy-copy-btn" data-bib-index="${idx}" style="position:absolute;top:8px;right:8px;padding:2px 8px;font-size:12px;border-radius:4px;border:1px solid #1890ff;background:#1890ff;color:white;cursor:pointer;">Copy</button>
+                        <span class="bibtidy-bibtex-text" style="display:block;">${bib}</span>
                     </div>
                 `).join('');
+
+                // Attach copy event listeners after rendering
+                setTimeout(() => {
+                    const copyBtns = popup.querySelectorAll('.bibtidy-copy-btn');
+                    copyBtns.forEach(btn => {
+                        btn.onclick = function() {
+                            const bibDiv = btn.closest('div');
+                            const bibText = bibDiv.querySelector('.bibtidy-bibtex-text').innerText;
+                            navigator.clipboard.writeText(bibText).then(() => {
+                                btn.textContent = 'Copied!';
+                                setTimeout(() => { btn.textContent = 'Copy'; }, 1200);
+                            });
+                        };
+                    });
+                }, 0);
             };
         }
 
